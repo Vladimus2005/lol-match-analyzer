@@ -2,9 +2,21 @@ import os
 import requests
 from typing import Optional
 from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 API_KEY: Optional[str] = os.getenv("RIOT_API_KEY")
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def get_puuid(game_name: str, tag_line: str) -> Optional[str]:
     """
@@ -157,39 +169,42 @@ def analyze_lane_diff(match_data: dict, player_puuid: str) -> Optional[dict]:
     return stats_summary
 
 # Application entry point
-if __name__ == "__main__":
-    print("\n=== 🎮 LoL Match Analyzer ===")
+@app.get("/api/analyze/{game_name}/{tag_line}")
+def analyze_match(game_name: str, tag_line: str) -> dict[str, Any]:
+    """
+    This is the endpoint your colleague will call from React.
+    Example call: http://localhost:8000/api/analyze/vladimus2005/EUNE
     
-    my_game_name: str = input("Enter your Riot ID (e.g., vladimus2005): ")
-    my_tag_line: str = input("Enter your Tagline without # (e.g., EUNE): ")
-    print("---------------------------------")
-    
-    my_puuid: Optional[str] = get_puuid(my_game_name, my_tag_line)
-    
-    if my_puuid:
-        last_match_id: Optional[str] = get_last_match_id(my_puuid)
+    Args:
+        game_name (str): The player's in-game name.
+        tag_line (str): The player's tag line (without the '#' symbol).
         
-        if last_match_id:
-            match_data: Optional[dict] = get_match_details(last_match_id)
-            
-            if match_data:
-                game_mode: str = match_data['info']['gameMode']
-                game_duration_sec: int = match_data['info']['gameDuration']
-                game_duration_min: int = game_duration_sec // 60
-                
-                print(f"\nMatch Info: {game_mode} game lasting {game_duration_min} minutes.")
-                analysis_result = analyze_lane_diff(match_data, my_puuid)
-                
-            if analysis_result:
-                p_stats = analysis_result['player']
-                e_stats = analysis_result['enemy']
-                role = analysis_result['role']
-                    
-                print(f"\n  LANE DIFF ANALYSIS ({role}) ")
-                print(f"You ({p_stats['champion']}) vs Enemy ({e_stats['champion']})")
-                print(f"Result: {'VICTORY ' if p_stats['win'] else 'DEFEAT '}")
-                print("---------------------------------")
-                print(f"KDA:    {p_stats['kills']}/{p_stats['deaths']}/{p_stats['assists']}  vs  {e_stats['kills']}/{e_stats['deaths']}/{e_stats['assists']}")
-                print(f"CS:     {p_stats['cs']}  vs  {e_stats['cs']}")
-                print(f"Damage: {p_stats['damage']:,}  vs  {e_stats['damage']:,}")
-                print(f"Gold:   {p_stats['gold']:,}  vs  {e_stats['gold']:,}")
+    Returns:
+        Dict[str, Any]: A JSON response containing match info and lane diff data.
+    """
+    my_puuid: Optional[str] = get_puuid(game_name, tag_line)
+    if not my_puuid:
+        raise HTTPException(status_code=404, detail="Player not found. Please check the name and tag.")
+
+    last_match_id: Optional[str] = get_last_match_id(my_puuid)
+    if not last_match_id:
+        raise HTTPException(status_code=404, detail="No Ranked Solo/Duo match found for this account.")
+
+    match_data: Optional[dict] = get_match_details(last_match_id)
+    if not match_data:
+        raise HTTPException(status_code=500, detail="Error fetching match data from Riot API.")
+
+    analysis_result: Optional[dict] = analyze_lane_diff(match_data, my_puuid)
+    if not analysis_result:
+        raise HTTPException(status_code=500, detail="Error analyzing direct opponent data.")
+
+    game_duration_min: int = match_data['info']['gameDuration'] // 60
+    
+    return {
+        "status": "success",
+        "match_info": {
+            "mode": match_data['info']['gameMode'],
+            "duration_minutes": game_duration_min
+        },
+        "data": analysis_result
+    }
