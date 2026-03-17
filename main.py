@@ -92,6 +92,70 @@ def get_match_details(match_id: str) -> Optional[dict]:
         print(f"Error {response.status_code}: Could not fetch match details.")
         return None
 
+def analyze_lane_diff(match_data: dict, player_puuid: str) -> Optional[dict]:
+    """
+    Finds the player and their direct opponent in the match data,
+    extracts their stats, and calculates the lane difference.
+    
+    Args:
+        match_data (dict): The massive dictionary containing all match info.
+        player_puuid (str): The PUUID of the user to find them in the match.
+        
+    Returns:
+        Optional[dict]: A summary of the player vs enemy stats, or None on error.
+    """
+    participants: list[dict] = match_data['info']['participants']
+    
+    my_data: Optional[dict] = None
+    enemy_data: Optional[dict] = None
+    
+    for p in participants:
+        if p['puuid'] == player_puuid:
+            my_data = p
+            break
+            
+    if not my_data:
+        print("Error: Player not found in the match data.")
+        return None
+        
+    my_role: str = my_data.get('teamPosition', 'UNKNOWN')
+    my_team: int = my_data.get('teamId', 0)
+    
+    for p in participants:
+        if p['teamPosition'] == my_role and p['teamId'] != my_team:
+            enemy_data = p
+            break
+            
+    if not enemy_data:
+        print(f"Error: Could not find a direct opponent for the role: {my_role}")
+        return None
+        
+    stats_summary = {
+        "role": my_role,
+        "player": {
+            "champion": my_data['championName'],
+            "kills": my_data['kills'],
+            "deaths": my_data['deaths'],
+            "assists": my_data['assists'],
+            "damage": my_data['totalDamageDealtToChampions'],
+            "cs": my_data['totalMinionsKilled'] + my_data['neutralMinionsKilled'],
+            "gold": my_data['goldEarned'],
+            "win": my_data['win']
+        },
+        "enemy": {
+            "champion": enemy_data['championName'],
+            "kills": enemy_data['kills'],
+            "deaths": enemy_data['deaths'],
+            "assists": enemy_data['assists'],
+            "damage": enemy_data['totalDamageDealtToChampions'],
+            "cs": enemy_data['totalMinionsKilled'] + enemy_data['neutralMinionsKilled'],
+            "gold": enemy_data['goldEarned'],
+            "win": enemy_data['win']
+        }
+    }
+    
+    return stats_summary
+
 # Application entry point
 if __name__ == "__main__":
     print("\n=== 🎮 LoL Match Analyzer ===")
@@ -114,4 +178,18 @@ if __name__ == "__main__":
                 game_duration_min: int = game_duration_sec // 60
                 
                 print(f"\nMatch Info: {game_mode} game lasting {game_duration_min} minutes.")
-                print("The massive data JSON is ready to be analyzed!")
+                analysis_result = analyze_lane_diff(match_data, my_puuid)
+                
+            if analysis_result:
+                p_stats = analysis_result['player']
+                e_stats = analysis_result['enemy']
+                role = analysis_result['role']
+                    
+                print(f"\n  LANE DIFF ANALYSIS ({role}) ")
+                print(f"You ({p_stats['champion']}) vs Enemy ({e_stats['champion']})")
+                print(f"Result: {'VICTORY ' if p_stats['win'] else 'DEFEAT '}")
+                print("---------------------------------")
+                print(f"KDA:    {p_stats['kills']}/{p_stats['deaths']}/{p_stats['assists']}  vs  {e_stats['kills']}/{e_stats['deaths']}/{e_stats['assists']}")
+                print(f"CS:     {p_stats['cs']}  vs  {e_stats['cs']}")
+                print(f"Damage: {p_stats['damage']:,}  vs  {e_stats['damage']:,}")
+                print(f"Gold:   {p_stats['gold']:,}  vs  {e_stats['gold']:,}")
