@@ -146,33 +146,119 @@ def analyze_lane_diff(match_data: dict, player_puuid: str) -> Optional[dict]:
         "role": my_role,
         "player": {
             "champion": my_data['championName'],
+            "champion_id": my_data['championId'],
             "kills": my_data['kills'],
             "deaths": my_data['deaths'],
             "assists": my_data['assists'],
             "damage": my_data['totalDamageDealtToChampions'],
             "cs": my_data['totalMinionsKilled'] + my_data['neutralMinionsKilled'],
             "gold": my_data['goldEarned'],
+            "vision": my_data.get('visionScore', 0),
             "win": my_data['win']
         },
         "enemy": {
             "champion": enemy_data['championName'],
+            "champion_id": enemy_data['championId'],
             "kills": enemy_data['kills'],
             "deaths": enemy_data['deaths'],
             "assists": enemy_data['assists'],
             "damage": enemy_data['totalDamageDealtToChampions'],
             "cs": enemy_data['totalMinionsKilled'] + enemy_data['neutralMinionsKilled'],
             "gold": enemy_data['goldEarned'],
+            "vision": enemy_data.get('visionScore', 0),
             "win": enemy_data['win']
         }
     }
     
     return stats_summary
 
+def calculate_performance_score(player: dict, enemy: dict, role: str) -> dict:
+    """
+    Compares player stats against the enemy and generates a grade and feedback.
+    
+    Args:
+        player (dict): The player's stats.
+        enemy (dict): The enemy's stats.
+        role (str): The role for both players
+        
+    Returns:
+        dict: A dictionary containing the 'grade' and a list of 'tips'.
+    """
+    score: float = 0.0
+    tips: list[str] = []
+    
+    # 1. KDA Analysis
+    player_kda = (player['kills'] + player['assists']) / max(1, player['deaths'])
+    enemy_kda = (enemy['kills'] + enemy['assists']) / max(1, enemy['deaths'])
+    
+    if player_kda > enemy_kda:
+        score += 30
+        tips.append("Excellent KDA! You traded much better than your opponent.")
+    else:
+        tips.append("Watch your positioning. The enemy had a better KDA ratio.")
+        
+    if role == "UTILITY":
+        # Dacă e Support, CS-ul și Damage-ul nu prea contează. Contează VIZIUNEA.
+        vision_diff = player['vision'] - enemy['vision']
+        if vision_diff > 15:
+            score += 40
+            tips.append("Map Hacker! Your vision control completely outclassed the enemy support.")
+        elif vision_diff > 0:
+            score += 20
+            tips.append("Good job on vision, you kept your team safer than the enemy support did.")
+        else:
+            score -= 15
+            tips.append(f"Vision gap. The enemy had {abs(vision_diff)} more vision score. Buy more Control Wards!")
+            
+        # La support, asisturile sunt vitale
+        if player['assists'] > enemy['assists'] + 5:
+            score += 15
+            tips.append("Great roaming and kill participation!")
+            
+    else:
+        cs_diff = player['cs'] - enemy['cs']
+        if cs_diff > 20:
+            score += 30
+            tips.append(f"Great farming! You out-CS'd your opponent by {cs_diff} minions.")
+        elif cs_diff > 0:
+            score += 15
+            tips.append("You had a slight CS advantage, keep focusing on last hits.")
+        else:
+            score -= 10
+            tips.append(f"You fell behind in farm. The enemy got {abs(cs_diff)} more minions than you.")
+            
+        dmg_diff = player['damage'] - enemy['damage']
+        if dmg_diff > 5000:
+            score += 25
+            tips.append("Huge impact in fights! You dealt significantly more damage.")
+        elif dmg_diff > 0:
+            score += 10
+            tips.append("Good damage output, slightly edging out your lane opponent.")
+        else:
+            score -= 10
+            tips.append("You lacked damage compared to your opponent. Try to participate more in teamfights.")
+    
+    # Calculate Final Grade based on the score (Max is around 100)
+    grade = "D"
+    if score >= 80:
+        grade = "S"
+    elif score >= 60:
+        grade = "A"
+    elif score >= 40:
+        grade = "B"
+    elif score >= 20:
+        grade = "C"
+        
+    return {
+        "score": score,
+        "grade": grade,
+        "tips": tips
+    }
+
 # Application entry point
 @app.get("/api/analyze/{game_name}/{tag_line}")
 def analyze_match(game_name: str, tag_line: str) -> dict[str, Any]:
     """
-    This is the endpoint your colleague will call from React.
     Example call: http://localhost:8000/api/analyze/vladimus2005/EUNE
     
     Args:
@@ -197,6 +283,13 @@ def analyze_match(game_name: str, tag_line: str) -> dict[str, Any]:
     analysis_result: Optional[dict] = analyze_lane_diff(match_data, my_puuid)
     if not analysis_result:
         raise HTTPException(status_code=500, detail="Error analyzing direct opponent data.")
+
+    performance = calculate_performance_score(
+        analysis_result['player'], 
+        analysis_result['enemy'],
+        analysis_result['role']
+    )
+    analysis_result['evaluation'] = performance
 
     game_duration_min: int = match_data['info']['gameDuration'] // 60
     
