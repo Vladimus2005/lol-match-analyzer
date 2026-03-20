@@ -30,6 +30,13 @@ export default function SearchForm() {
         }
     };
 
+    const handleClear = () => {
+        setGameName('');
+        setTagLine('');
+        setError(null);
+        setResult(null);
+    };
+
     return (
         <div className="max-w-md mx-auto mt-20 p-6 bg-slate-800 rounded-xl shadow-lg border border-slate-700">
             <h2 className="text-2xl font-bold mb-6 text-center text-blue-400">Match Analyzer (Lane Diff)</h2>
@@ -61,13 +68,35 @@ export default function SearchForm() {
 
                 {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
 
-                <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold rounded-lg shadow-md transition-colors"
-                >
-                    {isLoading ? 'Analyzing...' : 'Analyze'}
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg transition-all flex justify-center items-center gap-2"
+                    >
+                        {isLoading ? (
+                            <>
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/center" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Analyzing Match...
+                            </>
+                        ) : (
+                            'Analyze Lane Diff'
+                        )}
+                    </button>
+                    {(gameName || tagLine || result || error) && (
+                    <button
+                        type="button"
+                        onClick={handleClear}
+                        disabled={isLoading}
+                        className="py-3 px-6 bg-slate-600 hover:bg-slate-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg transition-all"
+                    >
+                        Clear
+                    </button>
+                    )}
+                </div>
             </form>
 
             <ResultCard data={result} />
@@ -81,7 +110,10 @@ function mockBackendCall(gameName, tagLine) {
             resolve({
                 player: `${gameName}#${tagLine}`,
                 role: "MID",
-                matchup: "Ahri vs Sylas",
+                championName: "Ahri",
+                championId: 103,
+                opponentName: "Sylas",
+                opponentId: 517,
                 laneDiff: {
                     csDiffAt15: "+18",
                     goldDiffAt15: "+450",
