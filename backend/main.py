@@ -10,6 +10,13 @@ API_KEY: Optional[str] = os.getenv("RIOT_API_KEY")
 
 app = FastAPI()
 
+@app.get("/")
+def read_root():
+    return {
+        "message": "Welcome to the LoL Match Analyzer API!",
+        "hint": "Try accessing /api/analyze/YourGameName/YourTagLine or go to /docs to test the API."
+    }
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -154,6 +161,9 @@ def analyze_lane_diff(match_data: dict, player_puuid: str) -> Optional[dict]:
             "cs": my_data['totalMinionsKilled'] + my_data['neutralMinionsKilled'],
             "gold": my_data['goldEarned'],
             "vision": my_data.get('visionScore', 0),
+            "objective_dmg": my_data.get('damageDealtToObjectives', 0),
+            "cc_time": my_data.get('timeCCingOthers', 0),
+            "mitigated_dmg": my_data.get('damageSelfMitigated', 0),
             "win": my_data['win']
         },
         "enemy": {
@@ -166,6 +176,9 @@ def analyze_lane_diff(match_data: dict, player_puuid: str) -> Optional[dict]:
             "cs": enemy_data['totalMinionsKilled'] + enemy_data['neutralMinionsKilled'],
             "gold": enemy_data['goldEarned'],
             "vision": enemy_data.get('visionScore', 0),
+            "objective_dmg": enemy_data.get('damageDealtToObjectives', 0),
+            "cc_time": enemy_data.get('timeCCingOthers', 0),
+            "mitigated_dmg": enemy_data.get('damageSelfMitigated', 0),
             "win": enemy_data['win']
         }
     }
@@ -187,7 +200,7 @@ def calculate_performance_score(player: dict, enemy: dict, role: str) -> dict:
     score: float = 0.0
     tips: list[str] = []
     
-    # 1. KDA Analysis
+    # KDA Analysis
     player_kda = (player['kills'] + player['assists']) / max(1, player['deaths'])
     enemy_kda = (enemy['kills'] + enemy['assists']) / max(1, enemy['deaths'])
     
@@ -198,7 +211,6 @@ def calculate_performance_score(player: dict, enemy: dict, role: str) -> dict:
         tips.append("Watch your positioning. The enemy had a better KDA ratio.")
         
     if role == "UTILITY":
-        # Dacă e Support, CS-ul și Damage-ul nu prea contează. Contează VIZIUNEA.
         vision_diff = player['vision'] - enemy['vision']
         if vision_diff > 15:
             score += 40
@@ -210,11 +222,47 @@ def calculate_performance_score(player: dict, enemy: dict, role: str) -> dict:
             score -= 15
             tips.append(f"Vision gap. The enemy had {abs(vision_diff)} more vision score. Buy more Control Wards!")
             
-        # La support, asisturile sunt vitale
+        cc_diff = player['cc_time'] - enemy['cc_time']
+        if cc_diff > 10:
+            score += 15
+            tips.append("Great crowd control! You locked down enemies much better than your opponent.")
+
         if player['assists'] > enemy['assists'] + 5:
             score += 15
             tips.append("Great roaming and kill participation!")
-            
+        
+    elif role == "JUNGLE":
+        obj_diff = player['objective_dmg'] - enemy['objective_dmg']
+        if obj_diff > 5000:
+            score += 30
+            tips.append("Objective Control King! You secured Dragons and Barons much better than the enemy jungler.")
+        elif obj_diff < -2000:
+            score -= 15
+            tips.append("You lacked objective control. Focus more on Dragons and Herald/Grubs next time.")
+                
+        if player['assists'] + player['kills'] > enemy['assists'] + enemy['kills']:
+            score += 15
+            tips.append("Great ganking presence across the map!")
+
+    elif role == "TOP":
+        obj_diff = player['objective_dmg'] - enemy['objective_dmg']
+        if obj_diff > 3000:
+            score += 15
+            tips.append("Excellent split-pushing pressure on enemy turrets.")
+                
+        tank_diff = player['mitigated_dmg'] - enemy['mitigated_dmg']
+        if tank_diff > 10000:
+            score += 10
+            tips.append("You acted as a solid frontline, absorbing a massive amount of damage for your team.")
+                
+        cs_diff = player['cs'] - enemy['cs']
+        if cs_diff > 20:
+            score += 20
+            tips.append(f"Top lane island won: You out-farmed your opponent by {cs_diff} minions.")
+        elif cs_diff < 0:
+            score -= 10
+            tips.append("You fell behind in farm during the laning phase.")
+
     else:
         cs_diff = player['cs'] - enemy['cs']
         if cs_diff > 20:
