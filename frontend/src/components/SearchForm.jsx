@@ -2,11 +2,14 @@ import { useState } from 'react';
 import ResultCard from './ResultCard';
 
 export default function SearchForm() {
+    const [region, setRegion] = useState('EUW');
     const [gameName, setGameName] = useState('');
     const [tagLine, setTagLine] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [result, setResult] = useState(null);
+
+    const sadPoroUrl = "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/icon-shocked-poro.png";
 
     const handleAnalyze = async (e) => {
         e.preventDefault();
@@ -21,10 +24,10 @@ export default function SearchForm() {
         setIsLoading(true);
 
         try {
-            const mockData = await mockBackendCall(gameName, tagLine);
+            const mockData = await mockBackendCall(region, gameName, tagLine);
             setResult(mockData);
         } catch (err) {
-            setError('An error occurred. Please try again.');
+            setError(err.message || 'An error occurred. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -38,37 +41,73 @@ export default function SearchForm() {
     };
 
     return (
-        <div className="max-w-md mx-auto mt-20 p-6 bg-slate-800 rounded-xl shadow-lg border border-slate-700">
+        <div className="max-w-xl mx-auto mt-20 p-6 bg-slate-800 rounded-xl shadow-lg border border-slate-700">
             <h2 className="text-2xl font-bold mb-6 text-center text-blue-400">Match Analyzer (Lane Diff)</h2>
 
-            <form onSubmit={handleAnalyze} className="space-y-4">
-                <div className="flex flex-col space-y-1">
-                    <label htmlFor="gameName" className="text-sm font-medium text-slate-300">Game Name</label>
-                    <input
-                        id="gameName"
-                        type="text"
-                        placeholder="Ex: Faker"
-                        value={gameName}
-                        onChange={(e) => setGameName(e.target.value)}
-                        className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                    />
+            <form onSubmit={handleAnalyze} className="space-y-5">
+
+                {/* Container for inputs (Region + Game Name + Tagline) */}
+                <div className="flex flex-col md:flex-row gap-4">
+
+                    {/* Select Region */}
+                    <div className="flex flex-col space-y-1 w-full md:w-1/4">
+                        <label htmlFor="region" className="text-sm font-medium text-slate-300">Region</label>
+                        <select
+                            id="region"
+                            value={region}
+                            onChange={(e) => setRegion(e.target.value)}
+                            className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-white"
+                        >
+                            <option value="EUW">EUW</option>
+                            <option value="EUNE">EUNE</option>
+                            <option value="NA">NA</option>
+                            <option value="KR">KR</option>
+                        </select>
+                    </div>
+
+                    {/* Input Game Name */}
+                    <div className="flex flex-col space-y-1 w-full md:w-2/4">
+                        <label htmlFor="gameName" className="text-sm font-medium text-slate-300">Game Name</label>
+                        <input
+                            id="gameName"
+                            type="text"
+                            placeholder="Ex: Faker"
+                            value={gameName}
+                            onChange={(e) => setGameName(e.target.value)}
+                            className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-white"
+                        />
+                    </div>
+
+                    {/* Input Tagline */}
+                    <div className="flex flex-col space-y-1 w-full md:w-1/4">
+                        <label htmlFor="tagLine" className="text-sm font-medium text-slate-300">Tagline</label>
+                        <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 font-bold">#</span>
+                            <input
+                                id="tagLine"
+                                type="text"
+                                placeholder="KR1"
+                                value={tagLine}
+                                onChange={(e) => setTagLine(e.target.value)}
+                                className="pl-8 pr-4 py-2 w-full bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-white"
+                            />
+                        </div>
+                    </div>
                 </div>
 
-                <div className="flex flex-col space-y-1">
-                    <label htmlFor="tagLine" className="text-sm font-medium text-slate-300">Tagline</label>
-                    <input
-                        id="tagLine"
-                        type="text"
-                        placeholder="Ex: KR1"
-                        value={tagLine}
-                        onChange={(e) => setTagLine(e.target.value)}
-                        className="px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                    />
-                </div>
+                {/* State of error "Sad Poro" */}
+                {error && (
+                    <div className="p-4 bg-red-900/40 border border-red-500/50 rounded-lg flex items-center gap-4 animate-in fade-in zoom-in duration-300">
+                        <img src={sadPoroUrl} alt="Sad Poro" className="w-16 h-16 object-contain" />
+                        <div>
+                            <h4 className="text-red-400 font-bold text-sm uppercase tracking-wider">Search Failed</h4>
+                            <p className="text-red-300/80 text-sm mt-0.5">{error}</p>
+                        </div>
+                    </div>
+                )}
 
-                {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
-
-                <div className="flex gap-3">
+                {/* Buttons */}
+                <div className="flex gap-3 pt-2">
                     <button
                         type="submit"
                         disabled={isLoading}
@@ -87,14 +126,14 @@ export default function SearchForm() {
                         )}
                     </button>
                     {(gameName || tagLine || result || error) && (
-                    <button
-                        type="button"
-                        onClick={handleClear}
-                        disabled={isLoading}
-                        className="py-3 px-6 bg-slate-600 hover:bg-slate-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg transition-all"
-                    >
-                        Clear
-                    </button>
+                        <button
+                            type="button"
+                            onClick={handleClear}
+                            disabled={isLoading}
+                            className="py-3 px-6 bg-slate-600 hover:bg-slate-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-bold rounded-lg shadow-lg transition-all"
+                        >
+                            Clear
+                        </button>
                     )}
                 </div>
             </form>
@@ -104,11 +143,16 @@ export default function SearchForm() {
     );
 }
 
-function mockBackendCall(gameName, tagLine) {
-    return new Promise((resolve) => {
+function mockBackendCall(region, gameName, tagLine) {
+    return new Promise((resolve, reject) => {
         setTimeout(() => {
+            if (gameName.toLowerCase() === 'teemo') {
+                reject(new Error("We couldn't find this player on the rift. Check the spelling or region!"));
+                return;
+            }
+
             resolve({
-                player: `${gameName}#${tagLine}`,
+                player: `${gameName} #${tagLine}`,
                 role: "MID",
                 championName: "Ahri",
                 championId: 103,
@@ -120,7 +164,7 @@ function mockBackendCall(gameName, tagLine) {
                     xpDiffAt15: "+320",
                     soloKills: 2
                 },
-                verdict: "Lane Kingdom!"
+                verdict: `Lane Kingdom in ${region}!`
             });
         }, 1500);
     });
