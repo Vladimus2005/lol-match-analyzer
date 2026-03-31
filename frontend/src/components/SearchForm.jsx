@@ -7,9 +7,12 @@ export default function SearchForm() {
     const [tagLine, setTagLine] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [result, setResult] = useState(null);
+    const [matches, setMatches] = useState(null);
+    const [selectedMatch, setSelectedMatch] = useState(null);
 
     const sadPoroUrl = "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/icon-shocked-poro.png";
+
+    const getIconUrl = (id) => `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champion-icons/${id}.png`;
 
     const handleAnalyze = async (e) => {
         e.preventDefault();
@@ -20,12 +23,13 @@ export default function SearchForm() {
         }
 
         setError(null);
-        setResult(null);
+        setMatches(null);
+        setSelectedMatch(null);
         setIsLoading(true);
 
         try {
-            const mockData = await mockBackendCall(region, gameName, tagLine);
-            setResult(mockData);
+            const mockDataArray = await mockBackendCall(region, gameName, tagLine);
+            setMatches(mockDataArray);
         } catch (err) {
             setError(err.message || 'An error occurred. Please try again.');
         } finally {
@@ -37,20 +41,18 @@ export default function SearchForm() {
         setGameName('');
         setTagLine('');
         setError(null);
-        setResult(null);
+        setMatches(null);
+        setSelectedMatch(null);
     };
 
     return (
         <div className="max-w-xl mx-auto mt-20 p-6 bg-slate-800 rounded-xl shadow-lg border border-slate-700">
             <h2 className="text-2xl font-bold mb-6 text-center text-blue-400">Match Analyzer (Lane Diff)</h2>
-
             <form onSubmit={handleAnalyze} className="space-y-5">
-
-                {/* Container for inputs (Region + Game Name + Tagline) */}
+                {/* Container for inputs */}
                 <div className="flex flex-col md:flex-row gap-4">
-
-                    {/* Select Region */}
                     <div className="flex flex-col space-y-1 w-full md:w-1/4">
+                        {/* Select region dropdown menu */}
                         <label htmlFor="region" className="text-sm font-medium text-slate-300">Region</label>
                         <select
                             id="region"
@@ -119,13 +121,13 @@ export default function SearchForm() {
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
-                                Analyzing Match...
+                                Analyzing Matches...
                             </>
                         ) : (
-                            'Analyze Lane Diff'
+                            'Get Match History'
                         )}
                     </button>
-                    {(gameName || tagLine || result || error) && (
+                    {(gameName || tagLine || matches || error) && (
                         <button
                             type="button"
                             onClick={handleClear}
@@ -138,7 +140,53 @@ export default function SearchForm() {
                 </div>
             </form>
 
-            <ResultCard data={result} />
+            {/* Rendering match list */}
+            {matches && !selectedMatch && (
+                <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h3 className="text-lg font-bold text-slate-300 mb-4 border-b border-slate-700 pb-2">Recent Ranked Matches</h3>
+                    <div className="space-y-3">
+                        {matches.map((match) => (
+                            <div
+                                key={match.id}
+                                onClick={() => setSelectedMatch(match)}
+                                className={`flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-all hover:scale-[1.02] ${match.isWin
+                                    ? 'bg-blue-900/20 border-blue-500/30 hover:bg-blue-900/40'
+                                    : 'bg-red-900/20 border-red-500/30 hover:bg-red-900/40'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="relative">
+                                        <img src={getIconUrl(match.championId)} alt="Champion" className="w-12 h-12 rounded-full border-2 border-slate-700" />
+                                    </div>
+                                    <div>
+                                        <p className={`font-black tracking-wider ${match.isWin ? 'text-blue-400' : 'text-red-400'}`}>
+                                            {match.isWin ? 'VICTORY' : 'DEFEAT'}
+                                        </p>
+                                        <p className="text-slate-400 text-sm font-medium">vs {match.opponentName}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-white font-bold">{match.laneDiff.csDiffAt15} CS @15</p>
+                                    <p className="text-slate-500 text-xs uppercase font-bold mt-1">Click for Lane Diff</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Rendering Detailed Match Card (If a match is selected) */}
+            {selectedMatch && (
+                <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <button
+                        onClick={() => setSelectedMatch(null)}
+                        className="mb-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-bold rounded-lg transition-colors flex items-center gap-2"
+                    >
+                        ← Back to Match History
+                    </button>
+                    <ResultCard data={selectedMatch} />
+                </div>
+            )}
         </div>
     );
 }
@@ -151,21 +199,46 @@ function mockBackendCall(region, gameName, tagLine) {
                 return;
             }
 
-            resolve({
-                player: `${gameName} #${tagLine}`,
-                role: "MID",
-                championName: "Ahri",
-                championId: 103,
-                opponentName: "Sylas",
-                opponentId: 517,
-                laneDiff: {
-                    csDiffAt15: "+18",
-                    goldDiffAt15: "+450",
-                    xpDiffAt15: "+320",
-                    soloKills: 2
+            const playerName = `${gameName} #${tagLine}`;
+
+            resolve([
+                {
+                    id: "match-1",
+                    isWin: true,
+                    player: playerName,
+                    role: "MID",
+                    championName: "Ahri",
+                    championId: 103,
+                    opponentName: "Sylas",
+                    opponentId: 517,
+                    laneDiff: { csDiffAt15: "+18", goldDiffAt15: "+450", xpDiffAt15: "+320", soloKills: 2 },
+                    verdict: `Lane Kingdom in ${region}!`
                 },
-                verdict: `Lane Kingdom in ${region}!`
-            });
-        }, 1500);
+                {
+                    id: "match-2",
+                    isWin: false,
+                    player: playerName,
+                    role: "MID",
+                    championName: "Syndra",
+                    championId: 134,
+                    opponentName: "Orianna",
+                    opponentId: 61,
+                    laneDiff: { csDiffAt15: "-12", goldDiffAt15: "-300", xpDiffAt15: "-150", soloKills: 0 },
+                    verdict: "Got Outscaled & Camped"
+                },
+                {
+                    id: "match-3",
+                    isWin: true,
+                    player: playerName,
+                    role: "MID",
+                    championName: "Yone",
+                    championId: 777,
+                    opponentName: "Yasuo",
+                    opponentId: 157,
+                    laneDiff: { csDiffAt15: "+5", goldDiffAt15: "+120", xpDiffAt15: "+50", soloKills: 1 },
+                    verdict: "Close Brother Matchup"
+                }
+            ]);
+        }, 1200);
     });
 }
